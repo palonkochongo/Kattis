@@ -16,7 +16,7 @@ let rec countBinTreeTail t a =
         match t with
         |Leaf -> a 0
         |Node(t1, n, t2) ->
-                (countBinTreeTail t1 (fun t1a -> countBinTreeTail t2 (fun t2a -> a (t1a+t2a+1))))
+                countBinTreeTail t1 (fun t1a -> countBinTreeTail t2 (fun t2a -> a (t1a+t2a+1)))
 
         //EX 8.2 Implementation with continuation function + accumulationj
 let rec countBinTreeTail2 t i a =
