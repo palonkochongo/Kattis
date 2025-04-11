@@ -37,7 +37,9 @@ let prsOperation ( s:string ) : Operation =
         |"cancel" -> Cancel timeInSec
         |"delay" ->
                 let delay = int m.Groups.[5].Value
-                printf "%d\n" delay
+                printf "%d\n" hour
+                printf "%d\n" min
+                printf "%d\n" sec
                 Delay (timeInSec, delay)
         |"reroute" -> Reroute {Time = timeInSec ; Dest = m.Groups.[5].Value}
         |_ -> failwith "not a valid operation!"
@@ -84,6 +86,14 @@ let rec reroute (s:Info) (f:FlightSched) =
                 else
                         Flight(left, n, reroute s right)
 
+let rec delMin f =
+        match f with
+        |Empty -> Empty
+        |Flight(left, n, right) ->
+                match left with
+                | Empty -> right  
+                | _ -> delMin left
+
 let rec cancel (s:int) (f:FlightSched) =
         match f with
         |Empty -> Empty
@@ -94,23 +104,19 @@ let rec cancel (s:int) (f:FlightSched) =
                         |Empty,_ -> right
                         |_, Empty -> left
                         |_,_ ->
-                                let rec findMax (f:FlightSched) =
+                                let rec findMin (f:FlightSched) =
                                         match f with
                                         |Empty -> failwith "This tree shouldn't be empty."
-                                        |Flight(_ , maxNode, Empty) -> maxNode
-                                        |Flight(_, _, right) -> findMax right
-                                let maxLeft = findMax left
-                                let newLeft = cancel maxLeft.Time left
-                                Flight(newLeft, maxLeft, right)
+                                        |Flight(Empty , minNode, _) -> minNode
+                                        |Flight(left, _, _) -> findMin left
+                                let minRight = findMin right
+                                let newRight = delMin right
+                                Flight(left, minRight, newRight)
                 elif s < n.Time then
                         cancel s left
                 else 
                         cancel s right
 
-let rec delMin f =
-        match f with
-        |Empty -> f
-        |Flight()
 
 let rec find s f =
         match f with
@@ -157,15 +163,14 @@ let rec readAndOperate n f =
 
 let rec printTable f = 
         match f with
-        |Empty -> ()
+        |Empty -> "Empty"
         |Flight(left, n, right) ->
-                printTable left
-                printf "%s\n" n.Dest
-                printTable right
+                "(" + printTable left + ", Dest: " + n.Dest + " Time: " + string n.Time + ", " + printTable right + ")"
 
 let line = Console.ReadLine()
 let nums = line.Split([|' '|]) |> Array.map int
 
 let sched = readAndBuild nums[0] Empty
+printf "%s\n" ( printTable sched )
 readAndOperate nums[1] sched
 
