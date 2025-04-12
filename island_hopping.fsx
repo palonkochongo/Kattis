@@ -1,14 +1,17 @@
+open System
+open System.Text.RegularExpressions
+
 type Vertex = double * double
 
 type Edge = {
         weight : double ;
-        v : Vertex ;
-        w : Vertex
+        fromV : Vertex
+        toV : Vertex
 }
 
 type Adjecent = {
-        v : Vertex
-        a : Edge List 
+        vert : Vertex
+        adjEdges : Edge List 
 }
 
 type Graph =
@@ -28,50 +31,24 @@ let createEdge ((a,b):Vertex) ((c,d):Vertex) =
         let weight = sqrt( x*x + y*y )
         { 
                 weight = weight
-                v = (a,b)
-                w = (c,d) 
+                fromV = (a,b)
+                toV = (c,d) 
         }
 
-let rec createAdjecent lVert acc vert = 
-        match lVert with
-        |[] -> 
-                 {
-                        v = vert
-                        a = acc
-                }
-        |x::xs -> 
-                if x = vert then 
-                        createAdjecent xs acc vert 
-                else
-                        let edge = createEdge x vert
-                        createAdjecent xs (edge::acc) vert
-        
+let createAdjEdges lVert vert =
+        let adjEdges =
+                lVert
+                |> List.filter (fun x -> x <> vert)
+                |> List.map (createEdge vert)
+        { vert = vert ; adjEdges = adjEdges }
+
 let rec buildGraph l : Graph =
-        List.map ( createAdjecent l [] ) l
+        List.map ( createAdjEdges l ) l
 
 let getNode pq =
         match pq with
         |Leaf -> None
         |Node(_, n, _) -> Some n
-
-let rec addEdge pq e = 
-        match pq with
-        |Leaf -> 
-                Node(Leaf, e, Leaf)
-        |Node(Leaf, n, right) ->
-                if e.weight < n.weight then
-                        Node(addEdge Leaf n, e, right)
-                elif e.weight < n.weight then
-                        Node(addEdge Leaf e, n, right)
-                else 
-                        Node(Leaf, n, right)
-        |Node(left, n, right) ->
-                if e.weight < n.weight then
-                        Node(left, e, addEdge right n)
-                elif e.weight < n.weight then
-                        Node(left, n, addEdge right e)
-                else
-                        Node(left, n, right)
 
 let rec merge h1 h2 = 
         match h1, h2 with
@@ -82,51 +59,103 @@ let rec merge h1 h2 =
                 else
                     Node(merge r2 h1, e2, l2)
 
+let addEdge1 (e:Edge) (pq:EdgePQ) =
+        let node = Node(Leaf, e, Leaf)
+        merge node pq
 
-let rec buildMinEdgePQ ( g:Graph ) ( pq:EdgePQ ) =
-        let rec helper e pq =
-                match e with
+
+let addAdjecent ( a:Adjecent ) ( pq:EdgePQ ) =
+        let rec helper al pq =
+                match al with
                 |[] -> pq
                 |x::xs -> 
-                        let pq' = addEdge pq x
+                        let pq' = addEdge1 x pq
                         helper xs pq'
-        match g with
-        |[] -> pq
-        |x::xs -> 
-                let pq' = helper x.a pq
-                buildMinEdgePQ xs pq'
 
-let rec exchange pq =
-        let rec getLast pq n =
-                match pq with
-                |Leaf -> None
-                |Node(left, n, right) ->
-                        match getNode left, getNode right with
-                        |Node(_, nl, _),Node(_, nr, _) ->
-                                if nl < nr then
-                                        Node(helper nl n,
-                        
-        let min = getNode pq
+        helper a.adjEdges pq
 
 let remove = function
-
         |Leaf -> None
-        |Node(left, n, right) ->
-                match getNode left, getNode right with
-                |Node(_, nl, _),Node(_, nr, _) ->
-                        if nl < nr then
+        |Node(left, min, right) ->
+                let pq = merge left right
+                Some (min, pq)
 
-(*
-                |Node(left, n, Leaf) ->
-                        if x.weight < n.weight then
-                                Node(addEdge left x, n, Leaf)
-                        elif x.weight > n.weight then
-                                Node(addEdge left n, x, Leaf)
-                        else Node(left, n, Leaf)
-                |Node(Leaf, n, right) ->
-                        if x.weight < n.weight then
-                                Node(Leaf, n, addEdge right x)
-                        elif x.weight > n.weight then
-                                Node(Leaf, x, addEdge right n)
-                        else Node(left, n, Leaf)
-*)
+let edgeEquals e1 e2 =
+    (e1.fromV = e2.fromV && e1.toV = e2.toV) ||
+    (e1.fromV = e2.toV && e1.toV = e2.fromV)
+
+let buildMST ( g:Graph ) =
+        let searchV g v =
+                match ( List.tryFind (fun ( x:Adjecent ) -> x.vert = v) g ) with
+                |Some adj ->
+                        let newGraph = List.filter (fun x -> x.vert <> v) g
+                        (adj, newGraph)
+                |None ->
+                        ({vert = v ; adjEdges = []}, g)
+        let rec helper g pq res visited =
+                match remove pq with
+                |None -> res
+                |Some(min, pq') -> 
+                        if ( Set.contains min.toV visited ) then
+                                helper g pq' res visited
+                        else
+                                let (minAdj, newGraph) = searchV g min.toV
+                                let unique = { 
+                                        vert = min.toV ; 
+                                        adjEdges = 
+                                                minAdj.adjEdges 
+                                                |> List.filter (fun x -> not (  List.exists (edgeEquals x ) res )) 
+                                }
+                                let pq'' = addAdjecent unique pq'
+                                helper newGraph pq'' (min::res) (Set.add min.toV visited)
+
+
+        let start = g.Head
+        let pq' = addAdjecent start Leaf
+        helper g pq' [] ( Set.singleton start.vert )
+
+let totalBridgeLength l =
+        List.foldBack (fun x acc -> x.weight + acc) l ( double 0.0 )
+
+let rec readInput lines =
+        let rec helper l acc =
+                match l with
+                |0 -> acc
+                |_ ->
+                        helper (l-1) ( Console.ReadLine()  :: acc )
+        helper lines []
+ 
+let toNumber ( l:list<string> ) =
+        int l.Head
+
+let formatInput l =
+        let formatLine l =
+                let reg = Regex @"\G(-?\d+\.\d+)\s(-?\d+\.\d+)"
+                let m = reg.Match l
+                if m.Success then
+                        let x = double m.Groups.[1].Value
+                        let y = double m.Groups.[2].Value
+                        Some (x, y)
+                else None
+        l |> List.choose formatLine
+
+
+let rec loadGraph acc n =
+        match n with
+        |0 -> acc
+        |_ ->
+                let length =
+                        1 
+                        |> readInput 
+                        |> toNumber
+                        |> readInput
+                        |> formatInput
+                        |> buildGraph
+                        |> buildMST
+                        |> totalBridgeLength
+                loadGraph ( length::acc ) (n-1)
+
+let printResult l = 
+        l |> List.iter (fun x -> printfn "%A" x) 
+
+1 |> readInput |> toNumber |> loadGraph [] |> List.rev |> printResult
